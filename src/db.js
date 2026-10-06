@@ -11,16 +11,4 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0
 });
-
-// Tee kysely tietokantaan
-async function haeData() {
-  try {
-    // mysql2/promise palauttaa taulukon, jossa ensimmäisenä elementtinä ovat rivit (tulokset)
-    const [tulos] = await pool.query('SELECT * FROM kayttajat');
-    console.log(tulos);
-  } catch (virhe) {
-    console.error('Virhe tietokantayhteydessä:', virhe);
-  }
-}
-
-haeData();
+module.exports = pool;
