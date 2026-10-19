@@ -233,18 +233,104 @@ RESERVATION
 ====================================
 */
 
-// GET /api/reservation
-app.get("/reservation", async (req, res) => {
-  try {
+// GET /reservation
+app.get("/reservation/my", async (req, res) => {
 
-    res.status(200).json(response.data);
-  } catch (error) {
-    res.status(error.response?.status || 500).json({
-      success: false,
-      message:
-        error.response?.data?.message ||
-        "Failed to fetch reservations",
+  try{
+
+    if (!req.session.user) {
+      res.status(401).json({
+        success: false,
+        message: "Not logged in"
+      });
+      return;
+    }
+
+    const [result] = await pool.query(
+      `
+          SELECT
+              varaus.*,
+              classroom.id AS joined_classroom_id,
+              classroom.name AS classroom_name,
+              classroom.maxPeople AS classroom_maxPeople,
+              classroom.equipment AS classroom_equipment
+          FROM varaus
+          JOIN classroom
+              ON classroom.id = varaus.classroom_id
+          WHERE varaus.user_id = ?
+      `,
+      [req.session.user.id]
+  );
+
+  const reservations = result.map(({
+      joined_classroom_id,
+      classroom_name,
+      classroom_maxPeople,
+      classroom_equipment,
+      ...reservation
+  }) => ({
+      ...reservation,
+      classroom: {
+          id: joined_classroom_id,
+          name: classroom_name,
+          maxPeople: classroom_maxPeople,
+          equipment: classroom_equipment
+      }
+  }));
+
+
+    console.log(result)
+
+    res.status(200).json(result);
+  } catch (e) {
+    res.status(500).json({ error: e })
+  }
+});
+
+app.post("/reservation", async (req, res) => {
+
+  try{
+    const reservation = req.body;
+
+    if (!req.session.user) {
+      res.status(401).json({
+        success: false,
+        message: "Not logged in"
+      });
+      return;
+    }
+
+    const [result] = await pool.query(
+      `
+        INSERT INTO varaus 
+        (user_id, classroom_id, startDateTime, finishDateTime)
+        VALUES (?, ?, ?, ?)
+      `,
+      [
+        req.session.user.id, 
+        reservation.classroomId, 
+        new Date(reservation.startAt)
+          .toISOString()
+          .slice(0, 19)
+          .replace("T", " "),
+
+        new Date(reservation.finishAt)
+          .toISOString()
+          .slice(0, 19)
+          .replace("T", " ")
+      ]
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: "Käyttäjä luotu onnistuneesti",
+      reservation: {
+        id: result.insertId
+      }
     });
+  } catch (e) {
+    console.log(e)
+    res.status(500).json({ error: e })
   }
 });
 
