@@ -9,12 +9,13 @@ const crypto = require("crypto");
 const session = require("express-session");
 app.use(express.json());
 
-app.use(
-  cors({
-    origin: "http://localhost:5173", // frontendisi osoite
-    credentials: true,
-  })
-);
+app.use(cors({
+    origin: [
+        'http://localhost:5173',
+        'http://185.176.94.192:30010'
+    ],
+    credentials: true
+}));
 
 app.use(
   session({
@@ -96,62 +97,62 @@ app.post("/user/login", async (req, res) => {
 
 // POST /api/user/register
 app.post("/user/register", async (req, res) => {
-    try {
-        console.log("Register request body:", req.body);
-         
-        const { name, email, password } = req.body;
-         
-        if (!name || !email || !password) {
-        return res.status(400).json({
+  try {
+    console.log("Register request body:", req.body);
+    
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
         success: false,
         message: "Kaikki kentät ovat pakollisia"
-        });
-        }
-         
-        // Tarkista löytyykö käyttäjä jo
-        const [existingUsers] = await pool.query(
-        "SELECT id FROM user WHERE email = ?",
-        [email]
-        );
-         
-        if (existingUsers.length > 0) {
-        return res.status(409).json({
+      });
+    }
+        
+    // Tarkista löytyykö käyttäjä jo
+    const [existingUsers] = await pool.query(
+      "SELECT id FROM user WHERE email = ?",
+      [email]
+    );
+    
+    if (existingUsers.length > 0) {
+      return res.status(409).json({
         success: false,
         message: "Sähköposti on jo käytössä"
-        });
-        }
-         
-        // Salasanan hashays
-        const hashedPassword = await bcrypt.hash(password, 10);
-         
-        // Lisää käyttäjä tietokantaan
-        const [result] = await pool.query(
-        `
-        INSERT INTO user
-        (name, email, password)
-        VALUES (?, ?, ?)
-        `,
-        [name, email, hashedPassword]
-        );
-         
-        res.status(201).json({
-            success: true,
-            message: "Käyttäjä luotu onnistuneesti",
-            user: {
-            id: result.insertId,
-            name,
-            email
-            }
-        });
-         
-    } catch (error) {
-        console.error("REGISTER ERROR:", error);
-         
-        res.status(500).json({
-            success: false,
-            message: "Registration failed"
-        });
+      });
     }
+    
+    // Salasanan hashays
+    const hashedPassword = await bcrypt.hash(password, 10);
+    
+    // Lisää käyttäjä tietokantaan
+    const [result] = await pool.query(
+      `
+      INSERT INTO user
+      (name, email, password)
+      VALUES (?, ?, ?)
+      `,
+      [name, email, hashedPassword]
+    );
+    
+    res.status(201).json({
+      success: true,
+      message: "Käyttäjä luotu onnistuneesti",
+      user: {
+        id: result.insertId,
+        name,
+        email
+      }
+    });
+    
+  } catch (error) {
+    console.error("REGISTER ERROR:", error);
+    
+    res.status(500).json({
+      success: false,
+      message: "Registration failed"
+    });
+  }
 });
 
 // GET /api/user
