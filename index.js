@@ -270,6 +270,9 @@ app.get("/reservation/my", async (req, res) => {
       ...reservation
   }) => ({
       ...reservation,
+      startAt: reservation.startDateTime,
+      finishAt: reservation.finishDateTime,
+      peopleCount: reservation.people,
       classroom: {
           id: joined_classroom_id,
           name: classroom_name,
@@ -279,9 +282,9 @@ app.get("/reservation/my", async (req, res) => {
   }));
 
 
-    console.log(result)
+    console.log(reservations)
 
-    res.status(200).json(result);
+    res.status(200).json(reservations);
   } catch (e) {
     res.status(500).json({ error: e })
   }
@@ -303,12 +306,13 @@ app.post("/reservation", async (req, res) => {
     const [result] = await pool.query(
       `
         INSERT INTO varaus 
-        (user_id, classroom_id, startDateTime, finishDateTime)
-        VALUES (?, ?, ?, ?)
+        (user_id, classroom_id, people, startDateTime, finishDateTime)
+        VALUES (?, ?, ?, ?, ?)
       `,
       [
         req.session.user.id, 
-        reservation.classroomId, 
+        reservation.classroomId,
+        reservation.peopleCount, 
         new Date(reservation.startAt)
           .toISOString()
           .slice(0, 19)
@@ -332,6 +336,188 @@ app.post("/reservation", async (req, res) => {
     console.log(e)
     res.status(500).json({ error: e })
   }
+});
+
+app.put("/reservation/:id", async (req, res) => {
+    try {
+        if (!req.session.user) {
+            return res.status(401).json({
+                success: false,
+                message: "Not logged in"
+            });
+        }
+
+        const { id } = req.params;
+        const { classroomId, startAt, finishAt, peopleCount } = req.body;
+
+        if (!classroomId || !startAt || !finishAt || peopleCount == null) {
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required"
+            });
+        }
+
+        const startDate = new Date(startAt);
+        const finishDate = new Date(finishAt);
+
+        if (
+            Number.isNaN(startDate.getTime()) ||
+            Number.isNaN(finishDate.getTime()) ||
+            finishDate <= startDate
+        ) {
+
+            console.error("Invalid reservation dates");
+            return res.status(400).json({
+                success: false,
+                message: "Invalid reservation dates"
+            });
+        }
+
+        const [result] = await pool.query(
+            `
+                UPDATE varaus
+                SET
+                    classroom_id = ?,
+                    startDateTime = ?,
+                    finishDateTime = ?,
+                    people = ?
+                WHERE id = ? AND user_id = ?
+            `,
+            [
+                classroomId,
+                startDate.toISOString().slice(0, 19).replace("T", " "),
+                finishDate.toISOString().slice(0, 19).replace("T", " "),
+                peopleCount,
+                id,
+                req.session.user.id
+            ]
+        );
+
+        if (result.affectedRows === 0) {
+
+            console.error("Reservation not found");
+
+            return res.status(404).json({
+                success: false,
+                message: "Reservation not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Reservation updated successfully"
+        });
+    } catch (e) {
+        console.error(e);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to update reservation"
+        });
+    }
+});
+
+app.get("/reservation/:id", async (req, res) => {
+    try {
+        if (!req.session.user) {
+            return res.status(401).json({
+                success: false,
+                message: "Not logged in"
+            });
+        }
+
+        const [result] = await pool.query(
+            `
+                SELECT
+                    varaus.*,
+                    classroom.id AS joined_classroom_id,
+                    classroom.name AS classroom_name,
+                    classroom.maxPeople AS classroom_maxPeople,
+                    classroom.equipment AS classroom_equipment
+                FROM varaus
+                JOIN classroom
+                    ON classroom.id = varaus.classroom_id
+                WHERE varaus.id = ? AND varaus.user_id = ?
+            `,
+            [req.params.id, req.session.user.id]
+        );
+
+        if (result.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Reservation not found"
+            });
+        }
+
+        const {
+            joined_classroom_id,
+            classroom_name,
+            classroom_maxPeople,
+            classroom_equipment,
+            ...reservation
+        } = result[0];
+
+        return res.status(200).json({
+            ...reservation,
+            startAt: reservation.startDateTime,
+            finishAt: reservation.finishDateTime,
+            peopleCount: reservation.people,
+            classroom: {
+                id: joined_classroom_id,
+                name: classroom_name,
+                maxPeople: classroom_maxPeople,
+                equipment: classroom_equipment
+            }
+        });
+    } catch (e) {
+        console.error(e);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch reservation"
+        });
+    }
+});
+
+// DELETE /reservation/:id
+app.delete("/reservation/:id", async (req, res) => {
+    try {
+        if (!req.session.user) {
+            return res.status(401).json({
+                success: false,
+                message: "Not logged in"
+            });
+        }
+
+        const { id } = req.params;
+
+        const [result] = await pool.query(
+            `
+                DELETE FROM varaus
+                WHERE id = ? AND user_id = ?
+            `,
+            [id, req.session.user.id]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "Reservation not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "Reservation deleted successfully"
+        });
+    } catch (e) {
+        console.error(e);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to delete reservation"
+        });
+    }
 });
 
 /*
