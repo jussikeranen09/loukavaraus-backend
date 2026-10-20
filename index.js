@@ -187,44 +187,50 @@ CLASSROOM
 
 // GET /api/classroom/list
 app.get("/classroom/list", async (req, res) => {
-  try {
-    const {
-      people,
-      equipment,
-      startTime,
-      finishTime,
-    } = req.query;
+    try {
+        const {
+            people,
+            equipment,
+            startTime,
+            finishTime,
+        } = req.query;
 
-    let sql = `
-      SELECT *
-      FROM classroom
-      WHERE 1=1
-    `;
+        let sql = `
+            SELECT *
+            FROM classroom
+            WHERE 1=1
+        `;
 
-    const params = [];
+        const params = [];
 
-    if (people && people > 0) {
-      sql += " AND capacity >= ?";
-      params.push(people);
+        if (people && Number(people) > 0) {
+            sql += " AND maxPeople >= ?";
+            params.push(Number(people));
+        }
+
+        if (equipment) {
+            sql += " AND equipment LIKE ?";
+            params.push(`%${equipment}%`);
+        }
+
+        const [classrooms] = await pool.query(sql, params);
+
+        const result = classrooms.map((classroom) => ({
+            ...classroom,
+            equipment: classroom.equipment
+                ? classroom.equipment.split(",").map((item) => item.trim())
+                : [],
+        }));
+
+        res.status(200).json(result);
+    } catch (error) {
+        console.error("CLASSROOM ERROR:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch classrooms"
+        });
     }
-
-    if (equipment && equipment.length > 0) {
-      sql += " AND equipment LIKE ?";
-      params.push(`%${equipment}%`);
-    }
-
-    const [classrooms] = await pool.query(sql, params);
-
-    res.status(200).json(classrooms);
-
-  } catch (error) {
-    console.error("CLASSROOM ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch classrooms"
-    });
-  }
 });
 
 /*
